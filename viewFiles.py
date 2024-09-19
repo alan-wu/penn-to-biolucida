@@ -5,22 +5,49 @@ import boto3  # sigh
 import requests
 from config import Config
 
-def get_biolucida_token(response):
+def get_biolucida_token():
+    url_bl_auth = f"{Config.BIOLUCIDA_ENDPOINT}/authenticate"
+    response = requests.post(url_bl_auth,
+                        data=dict(
+                            username=Config.BIOLUCIDA_USERNAME,
+                            password=Config.BIOLUCIDA_PASSWORD,
+                            token=''))
     if response.status_code == requests.codes.ok:
         content = response.json()
-        return content['token']
-    return null
+        if content['status'] == 'success':
+            return content['token']
+    return Null
+
+def initiate_biolucida_upload(filename, filesize, chunk_size, token):
+    url_bl_uinit = f"{Config.BIOLUCIDA_ENDPOINT}/upload/init"
+    response = requests.post(url_bl_uinit,
+                        data=dict(
+                            filename=filename,
+                            filesize=filesize,
+                            chunk_size=chunk_size),
+                            headers=dict(token=token))
+    if response.status_code == requests.codes.ok:
+        content = response.json()
+        if content['status'] == 'success':
+            return content
+    return Null
 
 
 def get_biolucida_id(filename):
-    url_bl_search = f"https://{Config.BIOLUCIDA_ENDPOINT}/search/{filename}"
+    url_bl_search = f"{Config.BIOLUCIDA_ENDPOINT}/search/{filename}"
     resp = requests.get(url_bl_search)
+    if response.status_code == requests.codes.ok:
+        content = response.json()
+        if content['status'] == 'success':
+            images = content['images']
+            for image in images:
+                if image['original_name'] == filename:
+                    return image['url'] #this is the id
+
+    return Null
 
 
-    return upload_key
-
-
-def fun2(resp):
+def get_upload_key(resp):
     print(resp.headers, resp.text)
     return imageid
 
@@ -30,28 +57,16 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
     # see https://documenter.getpostman.com/view/8986837/SWLh5mQL
     # see also https://github.com/nih-sparc/sparc-app/blob/0ca1c33e245b39b0f07485a990e3862af085013e/nuxt.config.js#L101
     BL_SERVER_URL = Config.BIOLUCIDA_ENDPOINT
-    url_bl_auth = f"https://{BL_SERVER_URL}/authenticate"  # username password token
-    url_bl_uinit = f"https://{BL_SERVER_URL}/upload/init" # filesize chunk_size filename -> upload_key
+     # filesize chunk_size filename -> upload_key
     # chunk_size is after decoded from base64
     # chunk_id means we can go in parallel in principle
-    url_bl_ucont = f"https://{BL_SERVER_URL}/upload/continue" # upload_key upload_data chunk_id
-    url_bl_ufin = f"https://{BL_SERVER_URL}/upload/finish"  # upload_key
-    url_bl_ima = f"https://{BL_SERVER_URL}/imagemap/add"  # imageid sourceid blackfynn_datasetId discover_datasetId
+    url_bl_ucont = f"{BL_SERVER_URL}/upload/continue" # upload_key upload_data chunk_id
+    url_bl_ufin = f"{BL_SERVER_URL}/upload/finish"  # upload_key
+    url_bl_ima = f"{BL_SERVER_URL}/imagemap/add"  # imageid sourceid blackfynn_datasetId discover_datasetId
 
-    resp_auth = requests.post(url_bl_auth,
-                              data=dict(
-                                  username=Config.BIOLUCIDA_USERNAME,
-                                  password=Config.BIOLUCIDA_PASSWORD,
-                                  token=''))
-    token = get_biolucida_token(resp_auth)
+    token = get_biolucida_token()
 
-    resp_init = requests.post(url_bl_uinit,
-                              data=dict(
-                                  filename=filename,
-                                  filesize=filesize,
-                                  chunk_size=chunk_size),
-                              headers=dict(token=token))
-    upload_key = fun1(resp_init)
+    upload_key = initiate_biolucida_upload(filename, filesize, chunk_size, token)
 
     resp_s3 = requests.get(s3url, stream=True)
     expect_chunks = math.ceil(filesize / chunk_size)
@@ -67,15 +82,16 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
     resp_fin = requests.post(url_bl_ufin,
                              data=dict(upload_key=upload_key))
 
-    imageid = fun2(resp_fin)  # ... uh no idea how we get this, hopefully it is in resp_fin ???
-    resp_img = requests.post(url_bl_ima,
+    imageid = get_biolucida_id(filename)
+    if imageid:
+        resp_img = requests.post(url_bl_ima,
                              data=dict(
                                  imageId=imageid,
                                  sourceId=package_id,
                                  blackfynn_datasetId=dataset_id,
                                  discover_datasetId=published_id),
                              headers=dict(token=token))
-    print(resp_img.text)
+        print(resp_img.text)
 
 
 def kwargs_from_pathmeta(blob, pennsieve_session, published_id):
