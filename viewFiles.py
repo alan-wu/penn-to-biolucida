@@ -4,6 +4,12 @@ import pathlib
 import boto3  # sigh
 import requests
 from config import Config
+import json
+
+log_file = open('progress_log.txt', 'a')
+
+bp_list = []
+
 
 def get_biolucida_token():
     url_bl_auth = f"{Config.BIOLUCIDA_ENDPOINT}/authenticate"
@@ -29,7 +35,20 @@ def initiate_biolucida_upload(filename, filesize, chunk_size, token):
     if response.status_code == requests.codes.ok:
         content = response.json()
         if content['status'] == 'success':
-            return content
+            return content['upload_key'], content['total_chunks']
+    return Null
+
+
+def cancel_biolucida_upload(upload_key):
+    url_bl_ucancel = f"{Config.BIOLUCIDA_ENDPOINT}/upload/cancel"
+    response = requests.post(url_bl_ucancel,
+                        data=dict(
+                            upload_key=upload_key
+                        ))
+    if response.status_code == requests.codes.ok:
+        content = response.json()
+        if content['status'] == 'success':
+            return content['filepath'], content['files']
     return Null
 
 
@@ -44,7 +63,7 @@ def get_biolucida_id(filename):
                 if image['original_name'] == filename:
                     return image['url'] #this is the id
 
-    return Null
+    return Null, Null
 
 
 def get_upload_key(resp):
@@ -53,7 +72,7 @@ def get_upload_key(resp):
 
 
 def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize, chunk_size=4096):
-
+    log_file.write(f"Upload {published_id}, {dataset_id}, {package_id}, {s3url}, {filename}, {filesize}\n")
     # see https://documenter.getpostman.com/view/8986837/SWLh5mQL
     # see also https://github.com/nih-sparc/sparc-app/blob/0ca1c33e245b39b0f07485a990e3862af085013e/nuxt.config.js#L101
     BL_SERVER_URL = Config.BIOLUCIDA_ENDPOINT
@@ -65,33 +84,59 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
     url_bl_ima = f"{BL_SERVER_URL}/imagemap/add"  # imageid sourceid blackfynn_datasetId discover_datasetId
 
     token = get_biolucida_token()
+    item = {
+        "package_id": package_id,
+        "filename": filename,
+        "discover_id": published_id
+        "status": "failed"
+    }
 
-    upload_key = initiate_biolucida_upload(filename, filesize, chunk_size, token)
 
-    resp_s3 = requests.get(s3url, stream=True)
-    expect_chunks = math.ceil(filesize / chunk_size)
-    for i, chunk in enumerate(resps3.iter_content(chunk_size=chunk_size)):
-        b64chunk = base64.encode(chunk)
-        resp_cont = requests.post(url_bl_ucont,
-                                  data=dict(
-                                      upload_key=upload_key,
-                                      upload_data=b64chunk,
-                                      chunk_id=i))
-        print(resp_cont.text)
+    if token:
+        upload_key, expect_chunks = initiate_biolucida_upload(filename, filesize, chunk_size, token)
+        log_file.write(f"{upload_key}, {expect_chunks}\n")
+        # see https://documenter.getpostman.com/view/8986837/SWLh5mQL
 
-    resp_fin = requests.post(url_bl_ufin,
-                             data=dict(upload_key=upload_key))
+        if upload_key:
+            resp_s3 = requests.get(s3url, stream=True)
+            for i, chunk in enumerate(resp_s3.iter_content(chunk_size=chunk_size)):
+                log_file.write(f"Chunk {i}: ")
+                b64chunk = base64.encode(chunk)
+                resp_cont = requests.post(url_bl_ucont,
+                                        data=dict(
+                                            upload_key=upload_key,
+                                            upload_data=b64chunk,
+                                            chunk_id=i))
+                content = resp_cont.json()
+                if content['status'] == 'success':
+                    log_file.write("Successful\n")
+                else:
+                    log_file.write("Fail\n")
 
-    imageid = get_biolucida_id(filename)
-    if imageid:
-        resp_img = requests.post(url_bl_ima,
-                             data=dict(
-                                 imageId=imageid,
-                                 sourceId=package_id,
-                                 blackfynn_datasetId=dataset_id,
-                                 discover_datasetId=published_id),
-                             headers=dict(token=token))
-        print(resp_img.text)
+            resp_fin = requests.post(url_bl_ufin,
+                                    data=dict(upload_key=upload_key))
+            log_file.write(f"Upload for {filename} completed\n")
+            imageid = get_biolucida_id(filename)
+            log_file.write(f"Biolucida id: {imageid}")
+            if imageid:
+                item['image_id'] = imageid
+                resp_img = requests.post(url_bl_ima,
+                                    data=dict(
+                                        imageId=imageid,
+                                        sourceId=package_id,
+                                        blackfynn_datasetId=dataset_id,
+                                        discover_datasetId=published_id),
+                                    headers=dict(token=token))
+                if content['status'] == 'success':
+                    log_file.write("Successful\n")
+                    item['status'] = 'sucessful'
+                else:
+                    log_file.write("Fail\n")
+        else:
+            log_file.write("Fail to get upload key")
+    else:
+        log_file.write("Fail to get authentication token")
+    bp_list.append(item)
 
 
 def kwargs_from_pathmeta(blob, pennsieve_session, published_id):
@@ -178,6 +223,10 @@ def view_files(dataset_id, extensions=("jpx", "jp2"), bioluc_username=None):
 def main():
     dataset_id = "N:dataset:aa43eda8-b29a-4c25-9840-ecbd57598afc"  # f001
     view_files(dataset_id)
+    log_file.close()
+    with open('output.json', 'w') as f:
+        json.dump(bp_list, f)
+
 
 
 if __name__ == "__main__":
