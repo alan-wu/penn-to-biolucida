@@ -72,6 +72,7 @@ def get_upload_key(resp):
 
 
 def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize, chunk_size=4096):
+    print(f"Uploading {published_id}, {s3url}, {filename}")
     log_file.write(f"Upload {published_id}, {dataset_id}, {package_id}, {s3url}, {filename}, {filesize}\n")
     # see https://documenter.getpostman.com/view/8986837/SWLh5mQL
     # see also https://github.com/nih-sparc/sparc-app/blob/0ca1c33e245b39b0f07485a990e3862af085013e/nuxt.config.js#L101
@@ -100,24 +101,29 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
         if upload_key:
             resp_s3 = requests.get(s3url, stream=True)
             for i, chunk in enumerate(resp_s3.iter_content(chunk_size=chunk_size)):
-                log_file.write(f"Chunk {i}: ")
+                log_file.write(f"Chunk {i} of {expect_chunk}: ")
                 b64chunk = base64.encode(chunk)
                 resp_cont = requests.post(url_bl_ucont,
                                         data=dict(
                                             upload_key=upload_key,
                                             upload_data=b64chunk,
                                             chunk_id=i))
-                content = resp_cont.json()
-                if content['status'] == 'success':
-                    log_file.write("Successful\n")
+                if resp_cont.status_code == requests.codes.ok:                           
+                    content = resp_cont.json()
+                    if content['status'] == 'success':
+                        log_file.write("Successful\n")
+                    else:
+                        log_file.write("Fail\n")
                 else:
                     log_file.write("Fail\n")
 
             resp_fin = requests.post(url_bl_ufin,
                                     data=dict(upload_key=upload_key))
+                                    
             log_file.write(f"Upload for {filename} completed\n")
             imageid = get_biolucida_id(filename)
-            log_file.write(f"Biolucida id: {imageid}")
+            log_file.write(f"Biolucida id: {imageid}\n")
+            log_file.write(f"imagemap: ")
             if imageid:
                 item['image_id'] = imageid
                 resp_img = requests.post(url_bl_ima,
@@ -127,9 +133,12 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
                                         blackfynn_datasetId=dataset_id,
                                         discover_datasetId=published_id),
                                     headers=dict(token=token))
-                if content['status'] == 'success':
-                    log_file.write("Successful\n")
-                    item['status'] = 'sucessful'
+                if resp_img.status_code == requests.codes.ok:   
+                    if content['status'] == 'success':
+                        log_file.write("Successful\n")
+                        item['status'] = 'sucessful'
+                    else:
+                        log_file.write("Fail\n")
                 else:
                     log_file.write("Fail\n")
         else:
@@ -137,6 +146,7 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
     else:
         log_file.write("Fail to get authentication token")
     bp_list.append(item)
+    print(item['status'])
 
 
 def kwargs_from_pathmeta(blob, pennsieve_session, published_id):
