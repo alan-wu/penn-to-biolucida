@@ -88,7 +88,7 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
     item = {
         "package_id": package_id,
         "filename": filename,
-        "discover_id": published_id
+        "discover_id": published_id,
         "status": "failed"
     }
 
