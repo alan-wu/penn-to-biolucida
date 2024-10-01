@@ -8,3 +8,5 @@ class Config(object):
     BIOLUCIDA_ENDPOINT = os.environ.get("BIOLUCIDA_ENDPOINT", "https://sparc.biolucida.net/api/v1")
     BIOLUCIDA_USERNAME = os.environ.get("BIOLUCIDA_USERNAME", "major-user")
     BIOLUCIDA_PASSWORD = os.environ.get("BIOLUCIDA_PASSWORD", "local-password")
+    TEST_DATASET_ID = os.environ.get("TEST_DATASET_ID", "")
+    TEST_PACKAGE_ID = os.environ.get("TEST_PACKAGE_ID", "")

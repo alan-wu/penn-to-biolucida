@@ -154,7 +154,6 @@ def kwargs_from_pathmeta(blob, pennsieve_session, published_id):
     package_id = 'N:' + blob['remote_id']
     filename = blob['basename']
     filesize = blob['size_bytes']
-
     resp = pennsieve_session.get(blob['uri_api'])
     s3url = resp.json()['url']
     return dict(
@@ -198,7 +197,7 @@ def make_pennsieve_session():
     return session
 
 
-def view_files(dataset_id, extensions=("jpx", "jp2"), bioluc_username=None):
+def process_files(dataset_id, extensions=("jpx", "jp2"), bioluc_username=None):
     dataset_uuid = dataset_id.split(':')[-1]
     url_metadata = f"https://cassava.ucsd.edu/sparc/datasets/{dataset_uuid}/LATEST/curation-export.json"
     url_path_metadata = f"https://cassava.ucsd.edu/sparc/datasets/{dataset_uuid}/LATEST/path-metadata.json"
@@ -207,11 +206,8 @@ def view_files(dataset_id, extensions=("jpx", "jp2"), bioluc_username=None):
     metadata = requests.get(url_metadata).json()
     path_metadata = requests.get(url_path_metadata).json()
     published_id = metadata['meta'].get('id_published', None)
-    organization_id = Config.PENNSIEVE_ORGANIZATION_ID
 
     pennsieve_session = make_pennsieve_session()
-
-    print(pennsieve_session)
 
     # get jpx and jp2 files
     matches = []
@@ -232,7 +228,7 @@ def view_files(dataset_id, extensions=("jpx", "jp2"), bioluc_username=None):
 
 def main():
     dataset_id = "N:dataset:aa43eda8-b29a-4c25-9840-ecbd57598afc"  # f001
-    view_files(dataset_id)
+    process_files(dataset_id)
     log_file.close()
     with open('output.json', 'w') as f:
         json.dump(bp_list, f)
