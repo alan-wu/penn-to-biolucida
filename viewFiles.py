@@ -55,8 +55,8 @@ def cancel_biolucida_upload(upload_key):
 def get_biolucida_id(filename):
     url_bl_search = f"{Config.BIOLUCIDA_ENDPOINT}/search/{filename}"
     resp = requests.get(url_bl_search)
-    if response.status_code == requests.codes.ok:
-        content = response.json()
+    if resp.status_code == requests.codes.ok:
+        content = resp.json()
         if content['status'] == 'success':
             images = content['images']
             for image in images:
@@ -71,7 +71,7 @@ def get_upload_key(resp):
     return imageid
 
 
-def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize, chunk_size=4096):
+def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize, chunk_size=1048576):
     print(f"Uploading {published_id}, {s3url}, {filename}")
     log_file.write(f"Upload {published_id}, {dataset_id}, {package_id}, {s3url}, {filename}, {filesize}\n")
     # see https://documenter.getpostman.com/view/8986837/SWLh5mQL
@@ -101,7 +101,9 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
         if upload_key:
             resp_s3 = requests.get(s3url, stream=True)
             for i, chunk in enumerate(resp_s3.iter_content(chunk_size=chunk_size)):
-                log_file.write(f"Chunk {i} of {expect_chunks}: ")
+                msg = f"Chunk {i} of {expect_chunks}: "
+                log_file.write(msg)
+                print(msg)
                 b64chunk = base64.encode(chunk)
                 resp_cont = requests.post(url_bl_ucont,
                                         data=dict(
@@ -112,17 +114,22 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
                     content = resp_cont.json()
                     if content['status'] == 'success':
                         log_file.write("Successful\n")
+                        print("Successful")
                     else:
                         log_file.write("Fail\n")
+                        print("Fail")
                 else:
                     log_file.write("Fail\n")
+                    print("Fail")
 
             resp_fin = requests.post(url_bl_ufin,
                                     data=dict(upload_key=upload_key))
                                     
             log_file.write(f"Upload for {filename} completed\n")
+            print(f"Upload for {filename} completed")
             imageid = get_biolucida_id(filename)
             log_file.write(f"Biolucida id: {imageid}\n")
+            
             log_file.write(f"imagemap: ")
             if imageid:
                 item['image_id'] = imageid

@@ -52,7 +52,7 @@ def cancel_biolucida_upload(upload_key):
 
 def get_biolucida_id(filename):
     url_bl_search = f"{Config.BIOLUCIDA_ENDPOINT}/search/{filename}"
-    resp = requests.get(url_bl_search)
+    response = requests.get(url_bl_search)
     if response.status_code == requests.codes.ok:
         content = response.json()
         if content['status'] == 'success':
@@ -67,7 +67,7 @@ def get_upload_key(resp):
     print(resp.headers, resp.text)
     return imageid
 
-def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize, chunk_size=4096):
+def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize, chunk_size=1048576):
     print(f"Uploading {published_id}, {s3url}, {filename}")
     log_file.write(f"Upload {published_id}, {dataset_id}, {package_id}, {s3url}, {filename}, {filesize}\n")
     # see https://documenter.getpostman.com/view/8986837/SWLh5mQL
@@ -114,6 +114,7 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
 
             resp_fin = requests.post(url_bl_ufin,
                                     data=dict(upload_key=upload_key))
+            print(resp_fin.json())
                                     
             log_file.write(f"Upload for {filename} completed\n")
             imageid = get_biolucida_id(filename)
