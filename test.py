@@ -97,7 +97,7 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
             resp_s3 = requests.get(s3url, stream=True)
             for i, chunk in enumerate(resp_s3.iter_content(chunk_size=chunk_size)):
                 log_file.write(f"Chunk {i} of {expect_chunks}: ")
-                b64chunk = base64.encode(chunk)
+                b64chunk = base64.encodebytes(chunk)
                 resp_cont = requests.post(url_bl_ucont,
                                         data=dict(
                                             upload_key=upload_key,

@@ -104,7 +104,7 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
                 msg = f"Chunk {i} of {expect_chunks}: "
                 log_file.write(msg)
                 print(msg)
-                b64chunk = base64.encode(chunk)
+                b64chunk = base64.encodebytes(chunk)
                 resp_cont = requests.post(url_bl_ucont,
                                         data=dict(
                                             upload_key=upload_key,
