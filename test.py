@@ -4,6 +4,8 @@ import pathlib
 import boto3  # sigh
 import requests
 from config import Config
+import json
+
 log_file = open('test_log.txt', 'a')
 
 bp_list = []
