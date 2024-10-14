@@ -51,7 +51,7 @@ def cancel_biolucida_upload(upload_key):
             return content['filepath'], content['files']
     return None
 
-def finalise_biolucida_upload(upload_key):
+def finalise_biolucida_upload(upload_key, filename):
     url_bl_ufin = f"{Config.BIOLUCIDA_ENDPOINT}/upload/finish"
     response = requests.post(url_bl_ufin,
                     data=dict(upload_key=upload_key))

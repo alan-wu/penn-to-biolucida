@@ -50,7 +50,7 @@ def cancel_biolucida_upload(upload_key):
             return content['filepath'], content['files']
     return None
 
-def finalise_biolucida_upload(upload_key):
+def finalise_biolucida_upload(upload_key, filename):
     url_bl_ufin = f"{Config.BIOLUCIDA_ENDPOINT}/upload/finish"
     response = requests.post(url_bl_ufin,
                     data=dict(upload_key=upload_key))
@@ -122,7 +122,7 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
                 else:
                     log_file.write("Fail\n")
 
-            imageid = finalise_biolucida_upload(upload_key)
+            imageid = finalise_biolucida_upload(upload_key, filename)
 
             if not imageid:
                 log_file.write(f"Alternate way to get biolucida id: ")                     
