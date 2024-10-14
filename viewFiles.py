@@ -22,7 +22,7 @@ def get_biolucida_token():
         content = response.json()
         if content['status'] == 'success':
             return content['token']
-    return Null
+    return None
 
 def initiate_biolucida_upload(filename, filesize, chunk_size, token):
     url_bl_uinit = f"{Config.BIOLUCIDA_ENDPOINT}/upload/init"
@@ -36,7 +36,7 @@ def initiate_biolucida_upload(filename, filesize, chunk_size, token):
         content = response.json()
         if content['status'] == 'success':
             return content['upload_key'], content['total_chunks']
-    return Null
+    return None
 
 
 def cancel_biolucida_upload(upload_key):
@@ -49,8 +49,22 @@ def cancel_biolucida_upload(upload_key):
         content = response.json()
         if content['status'] == 'success':
             return content['filepath'], content['files']
-    return Null
+    return None
 
+def finalise_biolucida_upload(upload_key):
+    url_bl_ufin = f"{Config.BIOLUCIDA_ENDPOINT}/upload/finish"
+    response = requests.post(url_bl_ufin,
+                    data=dict(upload_key=upload_key))
+    if response.status_code == requests.codes.ok:
+        log_file.write(f"Upload for {filename} completed\n")
+        content = response.json()
+        if content['status'] == 'success':
+            content = response.json()
+            log_file.write(f"Finish api biolucida id: {content['img_id']}\n")
+            return content['img_id']
+    else:
+        log_file.write(f"Finish api for upload for {filename} failed\n")
+    return None
 
 def get_biolucida_id(filename):
     url_bl_search = f"{Config.BIOLUCIDA_ENDPOINT}/search/{filename}"
@@ -63,7 +77,7 @@ def get_biolucida_id(filename):
                 if image['original_name'] == filename:
                     return image['url'] #this is the id
 
-    return Null, Null
+    return None
 
 
 def get_upload_key(resp):
@@ -81,7 +95,6 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
     # chunk_size is after decoded from base64
     # chunk_id means we can go in parallel in principle
     url_bl_ucont = f"{BL_SERVER_URL}/upload/continue" # upload_key upload_data chunk_id
-    url_bl_ufin = f"{BL_SERVER_URL}/upload/finish"  # upload_key
     url_bl_ima = f"{BL_SERVER_URL}/imagemap/add"  # imageid sourceid blackfynn_datasetId discover_datasetId
 
     token = get_biolucida_token()
@@ -122,13 +135,12 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
                     log_file.write("Fail\n")
                     print("Fail")
 
-            resp_fin = requests.post(url_bl_ufin,
-                                    data=dict(upload_key=upload_key))
-                                    
-            log_file.write(f"Upload for {filename} completed\n")
-            print(f"Upload for {filename} completed")
-            imageid = get_biolucida_id(filename)
-            log_file.write(f"Biolucida id: {imageid}\n")
+            imageid = finalise_biolucida_upload(upload_key)
+
+            if not imageid:
+                log_file.write(f"Alternate way to get biolucida id: ")                     
+                imageid = get_biolucida_id(filename)
+                log_file.write(f"Biolucida id: {imageid}\n")
             
             log_file.write(f"imagemap: ")
             if imageid:
@@ -154,6 +166,7 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
         log_file.write("Fail to get authentication token")
     bp_list.append(item)
     print(item['status'])
+    
 
 
 def kwargs_from_pathmeta(blob, pennsieve_session, published_id):
