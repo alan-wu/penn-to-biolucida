@@ -151,9 +151,10 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
                                         sourceId=package_id,
                                         blackfynn_datasetId=dataset_id,
                                         discover_datasetId=published_id),
-                                    headers=dict(token=token))
-                if resp_img.status_code == requests.codes.ok:   
-                    if content['status'] == 'success':
+                                        headers=dict(token=token))
+                if resp_img.status_code == requests.codes.ok:
+                    content = resp_img.json()
+                    if content['status='] == 'success':
                         log_file.write("Successful\n")
                         item['status'] = 'sucessful'
                     else:
@@ -167,7 +168,6 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
     bp_list.append(item)
     print(item['status'])
     
-
 
 def kwargs_from_pathmeta(blob, pennsieve_session, published_id):
     dataset_id = 'N:' + blob['dataset_id']
@@ -189,7 +189,6 @@ def kwargs_from_pathmeta(blob, pennsieve_session, published_id):
 def make_pennsieve_session():
     api_key = Config.PENNSIEVE_API_TOKEN
     api_secret = Config.PENNSIEVE_API_SECRET
-
 
     r = requests.get(f"{Config.PENNSIEVE_API_HOST}/authentication/cognito-config")
     r.raise_for_status()
