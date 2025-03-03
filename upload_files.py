@@ -6,7 +6,7 @@ import requests
 from config import Config
 import json
 
-log_file = open('test_log.txt', 'a')
+log_file = open('progress_log.txt', 'a')
 
 bp_list = []
 
@@ -38,6 +38,7 @@ def initiate_biolucida_upload(filename, filesize, chunk_size, token):
             return content['upload_key'], content['total_chunks']
     return None
 
+
 def cancel_biolucida_upload(upload_key):
     url_bl_ucancel = f"{Config.BIOLUCIDA_ENDPOINT}/upload/cancel"
     response = requests.post(url_bl_ucancel,
@@ -54,16 +55,15 @@ def finalise_biolucida_upload(upload_key, filename):
     url_bl_ufin = f"{Config.BIOLUCIDA_ENDPOINT}/upload/finish"
     response = requests.post(url_bl_ufin,
                     data=dict(upload_key=upload_key))
+    output = {}
     if response.status_code == requests.codes.ok:
         log_file.write(f"Upload for {filename} completed\n")
         content = response.json()
         if content['status'] == 'success':
             content = response.json()
-            output = {}
-            print(content)
             if 'img_id' in content:
               log_file.write(f"Finish api biolucida id: {content['img_id']}\n")
-              output['id']  = content['img_id']
+              output['img_id']  = content['img_id']
             else:
               if 'collection_id' in content and 'basename' in content:
                 log_file.write(f"Finish api biolucida id: {content['collection_id']}\n")
@@ -76,16 +76,22 @@ def finalise_biolucida_upload(upload_key, filename):
 
 def get_biolucida_id(filename):
     url_bl_search = f"{Config.BIOLUCIDA_ENDPOINT}/search/{filename}"
-    response = requests.get(url_bl_search)
-    if response.status_code == requests.codes.ok:
-        content = response.json()
+    resp = requests.get(url_bl_search)
+    if resp.status_code == requests.codes.ok:
+        content = resp.json()
         if content['status'] == 'success':
             images = content['images']
             for image in images:
                 if image['original_name'] == filename:
                     return image['url'] #this is the id
 
-    return None, None
+    return None
+
+
+def get_upload_key(resp):
+    print(resp.headers, resp.text)
+    return imageid
+
 
 def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize, chunk_size=1048576):
     print(f"Uploading {published_id}, {s3url}, {filename}")
@@ -107,6 +113,7 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
         "status": "failed"
     }
 
+
     if token:
         upload_key, expect_chunks = initiate_biolucida_upload(filename, filesize, chunk_size, token)
         log_file.write(f"{upload_key}, {expect_chunks}\n")
@@ -115,7 +122,9 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
         if upload_key:
             resp_s3 = requests.get(s3url, stream=True)
             for i, chunk in enumerate(resp_s3.iter_content(chunk_size=chunk_size)):
-                log_file.write(f"Chunk {i} of {expect_chunks}: ")
+                msg = f"Chunk {i} of {expect_chunks}: "
+                log_file.write(msg)
+                print(msg)
                 b64chunk = base64.encodebytes(chunk)
                 resp_cont = requests.post(url_bl_ucont,
                                         data=dict(
@@ -126,47 +135,39 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
                     content = resp_cont.json()
                     if content['status'] == 'success':
                         log_file.write("Successful\n")
+                        print("Successful")
                     else:
                         log_file.write("Fail\n")
+                        print("Fail")
                 else:
                     log_file.write("Fail\n")
+                    print("Fail")
 
             data = finalise_biolucida_upload(upload_key, filename)
             if data:
               item['status'] = "successful"
               for key in data:
                 item[key] = data[key]
-
-
-#            if not imageid:
-#                log_file.write(f"Alternate way to get biolucida id: ")                     
-#                imageid = get_biolucida_id(filename)
-#            
-#            log_file.write(f"Biolucida id: {imageid}\n")
-
-#            if imageid:
-#                item['image_id'] = imageid
-#                resp_img = requests.post(url_bl_ima,
-#                                    data=dict(
-#                                        imageId=imageid,
-#                                        sourceId=package_id,
-#                                        blackfynn_datasetId=dataset_id,
-#                                        discover_datasetId=published_id),
-#                                    headers=dict(token=token))
-#                if resp_img.status_code == requests.codes.ok:   
-#                    if content['status'] == 'success':
-#                        log_file.write("Successful\n")
-#                        item['status'] = 'sucessful'
-#                    else:
-#                        log_file.write("Fail\n")
-#                else:
-#                    log_file.write("Fail\n")
-#        else:
-#            log_file.write("Fail to get upload key")
-#    else:
-#        log_file.write("Fail to get authentication token")
     bp_list.append(item)
     print(item['status'])
+    
+
+def kwargs_from_pathmeta(blob, pennsieve_session, published_id):
+    dataset_id = 'N:' + blob['dataset_id']
+    package_id = 'N:' + blob['remote_id']
+    filename = blob['basename']
+    filesize = blob['size_bytes']
+    resp = pennsieve_session.get(blob['uri_api'])
+    s3url = resp.json()['url']
+    return dict(
+        dataset_id=dataset_id,
+        published_id=published_id,
+        package_id=package_id,
+        s3url=s3url,
+        filename=filename,
+        filesize=filesize
+    )
+
 
 def make_pennsieve_session():
     api_key = Config.PENNSIEVE_API_TOKEN
@@ -197,38 +198,44 @@ def make_pennsieve_session():
     session.headers.update({"Authorization": f"Bearer {api_token}"})
     return session
 
-def get_download_details(pennsieve_session):
-    dataset_id = Config.TEST_DATASET_ID # f001
-    package_id = Config.TEST_PACKAGE_ID
-    #packagee_url = "https://api.pennsieve.io/packages/" + package_id + "/files/" + file_id
-    package_view = "https://api.pennsieve.io/packages/" + package_id + "/view"
-    resp = pennsieve_session.get(package_view)
-    data = resp.json()[0]['content']
-    filename = data['filename']
-    filesize = data['size']
-    file_id = str(data['id'])
-    packagee_url = "https://api.pennsieve.io/packages/" + package_id + "/files/" + file_id
-    resp = pennsieve_session.get(packagee_url)
-    s3url = resp.json()['url']
-    return dict(
-        dataset_id=dataset_id,
-        published_id="99999",
-        package_id=package_id,
-        s3url=s3url,
-        filename=filename,
-        filesize=filesize
-    )
 
-def test_uploads():
+def process_files(dataset_id, extensions=("jpx", "jp2"), bioluc_username=None):
+    dataset_uuid = dataset_id.split(':')[-1]
+    url_metadata = f"https://cassava.ucsd.edu/sparc/datasets/{dataset_uuid}/LATEST/curation-export.json"
+    url_path_metadata = f"https://cassava.ucsd.edu/sparc/datasets/{dataset_uuid}/LATEST/path-metadata.json"
+
+    # fetch metadata and path metadata
+    metadata = requests.get(url_metadata).json()
+    path_metadata = requests.get(url_path_metadata).json()
+    published_id = metadata['meta'].get('id_published', None)
+
     pennsieve_session = make_pennsieve_session()
-    detail = get_download_details(pennsieve_session)
-    upload_to_bl(**detail)
+
+    # get jpx and jp2 files
+    matches = []
+    for blob in path_metadata['data']:
+        bn = blob['basename']
+        if bn.endswith('.jpx') or bn.endswith('.jp2'):
+            matches.append(blob)
+
+    wargs = []
+
+    for match in matches:
+        wargs.append(kwargs_from_pathmeta(match, pennsieve_session, published_id))
+
+    print(wargs)
+
+    #for warg in wargs:
+    #    upload_to_bl(**warg, secrets=secrets, username=bioluc_username)
 
 def main():
-    test_uploads()
+    dataset_id = "N:dataset:aa43eda8-b29a-4c25-9840-ecbd57598afc"  # f001
+    process_files(dataset_id)
     log_file.close()
-    with open('test_output.json', 'w') as f:
+    with open('output.json', 'w') as f:
         json.dump(bp_list, f)
+
+
 
 if __name__ == "__main__":
     main()
