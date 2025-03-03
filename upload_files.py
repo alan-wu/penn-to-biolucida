@@ -225,8 +225,19 @@ def process_files(dataset_id, extensions=("jpx", "jp2"), bioluc_username=None):
 
     print(wargs)
 
-    #for warg in wargs:
-    #    upload_to_bl(**warg, secrets=secrets, username=bioluc_username)
+    for warg in wargs:
+      print(wargs)
+      try:
+        upload_to_bl(**warg)
+      except:
+        item = {
+          "package_id": warg['package_id'],
+          "filename": warg['filename'],
+          "discover_id": warg['published_id'],
+          "status": "failed"
+        }
+        bp_list.append(item)
+
 
 def main():
     dataset_id = "N:dataset:aa43eda8-b29a-4c25-9840-ecbd57598afc"  # f001
@@ -234,8 +245,6 @@ def main():
     log_file.close()
     with open('output.json', 'w') as f:
         json.dump(bp_list, f)
-
-
 
 if __name__ == "__main__":
     main()
