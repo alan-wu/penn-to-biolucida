@@ -199,7 +199,7 @@ def make_pennsieve_session():
     return session
 
 
-def process_files(dataset_id, extensions=("jpx", "jp2"), bioluc_username=None):
+def process_files(dataset_id, finished, extensions=("jpx", "jp2"), bioluc_username=None):
     dataset_uuid = dataset_id.split(':')[-1]
     url_metadata = f"https://cassava.ucsd.edu/sparc/datasets/{dataset_uuid}/LATEST/curation-export.json"
     url_path_metadata = f"https://cassava.ucsd.edu/sparc/datasets/{dataset_uuid}/LATEST/path-metadata.json"
@@ -227,7 +227,9 @@ def process_files(dataset_id, extensions=("jpx", "jp2"), bioluc_username=None):
 
     for warg in wargs:
       try:
-        upload_to_bl(**warg)
+        if not warg['package_id'] in finished:
+          #print(warg['filename'])
+          upload_to_bl(**warg)
       except:
         item = {
           "package_id": warg['package_id'],
@@ -240,8 +242,22 @@ def process_files(dataset_id, extensions=("jpx", "jp2"), bioluc_username=None):
 
 def main():
     dataset_id = "N:dataset:aa43eda8-b29a-4c25-9840-ecbd57598afc"  # f001
-    process_files(dataset_id)
+    finished = []
+    try:
+      f = open('input.json', 'rb')
+      with f:
+        data = json.load(f)
+        for item in data:
+          if item['status'] == 'successful':
+            bp_list.append(item)
+          else:
+            finished.append(item['package_id'])
+    except OSError:
+      print("No input file")
+
+    process_files(dataset_id, finished)
     log_file.close()
+
     with open('output.json', 'w') as f:
         json.dump(bp_list, f)
 
