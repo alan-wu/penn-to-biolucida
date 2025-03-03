@@ -226,7 +226,6 @@ def process_files(dataset_id, extensions=("jpx", "jp2"), bioluc_username=None):
     print(wargs)
 
     for warg in wargs:
-      print(wargs)
       try:
         upload_to_bl(**warg)
       except:
