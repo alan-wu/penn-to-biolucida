@@ -39,8 +39,7 @@ def get_biolucida_id(item, token):
         print(content)
         if content['status'] == 'success' and 'image_id' in content:
             item['img_id'] = content['image_id']
-            return item
-    return None
+    return item
 
 
 def main():
