@@ -113,7 +113,6 @@ def upload_to_bl(dataset_id, published_id, package_id, s3url, filename, filesize
         "status": "failed"
     }
 
-
     if token:
         upload_key, expect_chunks = initiate_biolucida_upload(filename, filesize, chunk_size, token)
         log_file.write(f"{upload_key}, {expect_chunks}\n")
@@ -226,8 +225,10 @@ def process_files(dataset_id, skipped, extensions=("jpx", "jp2"), bioluc_usernam
     for warg in wargs:
       try:
         if not warg['package_id'] in skipped:
-          #print('In', warg['filename'])
+          print('Required uploading', warg['filename'])
           upload_to_bl(**warg)
+        else:
+          print('uploaded', warg['filename'])
       except:
         item = {
           "package_id": warg['package_id'],
